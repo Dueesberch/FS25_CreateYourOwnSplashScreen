@@ -9,9 +9,7 @@ use std::path::PathBuf;
 #[cfg(target_os = "windows")]
 use winreg::{RegKey, enums::*};
 
-// Funktion zum Finden des Installationspfads
 pub fn find_fs25_install_dir() -> Option<PathBuf> {
-    // Windows-spezifische Suche
     #[cfg(windows)]
     {
         let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
@@ -24,7 +22,6 @@ pub fn find_fs25_install_dir() -> Option<PathBuf> {
         }
     }
 
-    // Linux-spezifische Suche (Steam)
     #[cfg(target_os = "linux")]
     {
         if let Ok(home) = std::env::var("HOME") {
@@ -36,11 +33,10 @@ pub fn find_fs25_install_dir() -> Option<PathBuf> {
         }
     }
 
-    // Gemeinsamer Fallback für Steam unter Windows oder benutzerdefinierte Pfade
     let default_steam = if cfg!(windows) {
         PathBuf::from(r"C:\Program Files (x86)\Steam\steamapps\common\Farming Simulator 25")
     } else {
-        PathBuf::from("/usr/share/steam/steamapps/common/Farming Simulator 25") // Beispiel für Systempfad
+        PathBuf::from("/usr/share/steam/steamapps/common/Farming Simulator 25")
     };
 
     if default_steam.exists() {
@@ -50,7 +46,6 @@ pub fn find_fs25_install_dir() -> Option<PathBuf> {
     }
 }
 
-// Funktion zum Installieren der Datei
 pub fn install_to_game(source: PathBuf, install_dir: PathBuf) -> io::Result<()> {
     let target_dir = install_dir.join("shared");
     if !target_dir.exists() {
@@ -65,7 +60,6 @@ pub fn install_to_game(source: PathBuf, install_dir: PathBuf) -> io::Result<()> 
     let backup_path = target_dir.join("splash.dds.bak");
     let backup_path_2 = target_dir.join("splash_highlandsFishing.dds.bak");
 
-    // Backup erstellen, falls noch nicht vorhanden
     if target_path.exists() && !backup_path.exists() {
         std::fs::copy(&target_path, &backup_path)?;
     }
@@ -73,7 +67,6 @@ pub fn install_to_game(source: PathBuf, install_dir: PathBuf) -> io::Result<()> 
         std::fs::copy(&target_path_2, &backup_path_2)?;
     }
 
-    // Neue Datei kopieren
     std::fs::copy(&source, target_path)?;
     std::fs::copy(source, target_path_2)?;
     Ok(())
@@ -83,34 +76,25 @@ pub fn convert_to_dds(
     input_path: PathBuf,
 ) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
     let final_size = 4096;
-    let target_center_y = 3048; // Deine gewünschte Mitte
+    let target_center_y = 3048;
 
-    // 1. Bild laden
     let img = image::open(&input_path)?.to_rgba8();
     let (width, height) = img.dimensions();
 
-    // Da das Bild immer 4096 breit sein soll:
     let new_w = 4096;
-    // Proportionale Höhe berechnen
     let aspect_ratio = height as f32 / width as f32;
     let new_h = (new_w as f32 * aspect_ratio) as u32;
 
-    // Skalieren (Breite ist nun fix 4096)
     let resized = image::imageops::resize(&img, new_w, new_h, FilterType::Lanczos3);
 
-    // Schwarze Leinwand erstellen
     let mut canvas = RgbaImage::from_pixel(final_size, final_size, Rgba([0, 0, 0, 255]));
 
-    // Offsets berechnen
-    let x_offset = 0; // Da Breite 4096 auf 4096 Leinwand
+    let x_offset = 0;
 
-    // Die Mitte des skalierten Bildes soll bei 3048 liegen
     let y_offset = (target_center_y as i64) - (new_h as i64 / 2);
 
-    // Overlay auf die Leinwand legen
     image::imageops::overlay(&mut canvas, &resized, x_offset, y_offset);
 
-    // 2. Nur eine Ebene komprimieren (Mipmaps auf 1 setzen)
     let mut compressed =
         vec![0u8; Format::Bc1.compressed_size(final_size as usize, final_size as usize)];
     Format::Bc1.compress(
@@ -125,20 +109,18 @@ pub fn convert_to_dds(
         &mut compressed,
     );
 
-    // 3. LEGACY HEADER mit NewD3dParams
     let mut dds = Dds::new_d3d(NewD3dParams {
         height: final_size,
         width: final_size,
         depth: None,
         format: D3DFormat::DXT1,
-        mipmap_levels: None, // Dies setzt den Count im Header auf 1
+        mipmap_levels: None,
         caps2: None,
     })
     .map_err(|e| format!("DDS Header Fehler: {:?}", e))?;
 
     dds.data = compressed;
 
-    // 4. Speichern
     let parent = input_path.parent().ok_or("Pfad ungültig")?;
     let primary_path = parent.join("splash.dds");
 

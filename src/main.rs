@@ -1,10 +1,9 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // Versteckt die Konsole unter Windows
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use eframe::{Renderer, egui};
 use std::path::PathBuf;
 use sys_locale::get_locale;
 
-// Wir importieren deine Logik von vorhin (leicht angepasst für Threads)
 mod converter;
 
 struct I18n {
@@ -13,14 +12,12 @@ struct I18n {
 
 impl I18n {
     fn new() -> Self {
-        // Erkennt "de-DE", "de-CH" etc.
         let locale = get_locale().unwrap_or_else(|| "en-US".to_string());
         Self {
             is_german: locale.starts_with("de"),
         }
     }
 
-    // Hilfsfunktion für die Texte
     fn t(&self, german: &str, english: &str) -> String {
         if self.is_german {
             german.to_string()
@@ -35,7 +32,6 @@ struct ConverterApp {
     is_processing: bool,
     tx: std::sync::mpsc::Sender<String>,
     rx: std::sync::mpsc::Receiver<String>,
-    // Neue Felder:
     last_generated_path: Option<PathBuf>,
     install_dir: Option<PathBuf>,
     i18n: I18n,
@@ -45,7 +41,7 @@ impl ConverterApp {
     fn new() -> Self {
         let (tx, rx) = std::sync::mpsc::channel();
         Self {
-            status: "Bereit.".to_string(), // Wird in update() übersetzt
+            status: "Bereit.".to_string(),
             is_processing: false,
             tx,
             rx,
@@ -59,7 +55,6 @@ impl ConverterApp {
 impl eframe::App for ConverterApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if let Ok(msg) = self.rx.try_recv() {
-            // Wenn die Nachricht mit "SUCCESS:" beginnt, speichern wir den Pfad
             if msg.starts_with("SUCCESS:") {
                 let path_str = msg.replace("SUCCESS:", "");
                 self.last_generated_path = Some(PathBuf::from(&path_str));
@@ -75,7 +70,6 @@ impl eframe::App for ConverterApp {
                 ui.add_space(10.0);
                 ui.heading("DDS Converter 4K + Auto-Install");
 
-                // Status der Spiel-Erkennung
                 ui.horizontal(|ui| {
                     if let Some(path) = &self.install_dir {
                         let msg = self.i18n.t("FS25 gefunden", "FS25 found");
@@ -93,7 +87,6 @@ impl eframe::App for ConverterApp {
 
                 ui.separator();
 
-                // Button 1: Konvertieren
                 ui.add_enabled_ui(!self.is_processing, |ui| {
                     if ui
                         .button(
@@ -130,7 +123,6 @@ impl eframe::App for ConverterApp {
                     }
                 });
 
-                // Button 2: Installieren (Nur aktiv, wenn Bild konvertiert und Pfad gefunden)
                 ui.add_space(5.0);
                 let can_install = self.last_generated_path.is_some() && self.install_dir.is_some();
                 ui.add_enabled_ui(can_install && !self.is_processing, |ui| {
@@ -152,14 +144,13 @@ impl eframe::App for ConverterApp {
                 });
 
                 ui.add_space(10.0);
-                // Status Anzeige
 
                 let status_msg = if self.status == "Bereit." {
                     self.i18n.t("Bereit.", "Ready.")
                 } else if self.status == "Konvertiere..." {
                     self.i18n.t("Konvertiere...", "Converting...")
                 } else {
-                    self.status.clone() // Pfade oder Fehler bleiben wie sie sind
+                    self.status.clone()
                 };
 
                 ui.label(status_msg);
@@ -174,7 +165,7 @@ impl eframe::App for ConverterApp {
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([600.0, 200.0]) // Breite x Höhe
+            .with_inner_size([600.0, 200.0])
             .with_resizable(false),
         renderer: Renderer::Wgpu,
         ..Default::default()
@@ -183,9 +174,6 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "FS25 Splash DDS Konverter",
         options,
-        Box::new(|_cc| {
-            // Hier geben wir das Result zurück, das eframe erwartet
-            Ok(Box::new(ConverterApp::new()))
-        }),
+        Box::new(|_cc| Ok(Box::new(ConverterApp::new()))),
     )
 }
